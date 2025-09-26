@@ -54,6 +54,10 @@
               see which experts are aligned.
             </li>
             <li>
+              Glance at the <strong>Weekly Snapshot</strong> to surface consensus
+              edges and the most confident recommendations.
+            </li>
+            <li>
               Import &amp; export JSON to keep your prep synced across devices.
             </li>
           </ul>
@@ -131,7 +135,12 @@
             </label>
             <label class="field">
               <span>Market</span>
-              <input name="market" type="text" placeholder="Spread, Moneyline, Total" />
+              <input
+                name="market"
+                type="text"
+                placeholder="Spread, Moneyline, Total"
+                list="marketSuggestions"
+              />
             </label>
           </div>
           <label class="field">
@@ -156,6 +165,13 @@
               <output data-confidence-output>50%</output>
             </div>
           </label>
+          <div class="field field--choice">
+            <span>Priority</span>
+            <label class="checkbox">
+              <input name="priority" type="checkbox" />
+              <span>Highlight this pick and surface it in the Priority Board</span>
+            </label>
+          </div>
           <label class="field">
             <span>Reference link</span>
             <input name="link" type="url" placeholder="https://example.com/article" />
@@ -177,6 +193,18 @@
     </dialog>
 
     <input id="importFileInput" type="file" accept="application/json" hidden />
+
+    <datalist id="marketSuggestions">
+      <option value="Spread"></option>
+      <option value="Moneyline"></option>
+      <option value="Total"></option>
+      <option value="Player Prop"></option>
+      <option value="Team Total"></option>
+      <option value="First Half"></option>
+      <option value="Second Half"></option>
+      <option value="Alt Line"></option>
+      <option value="Same Game Parlay"></option>
+    </datalist>
 
     <template id="emptyStateTemplate">
       <div class="empty-state">

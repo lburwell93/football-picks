@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Football Pick Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="toolbar__left">
+        <h1>Football Pick Intelligence Hub</h1>
+        <p class="tagline">
+          Compare expert opinions, surface consensus insights, and organize your
+          weekly card in one beautiful board.
+        </p>
+      </div>
+      <div class="toolbar__actions">
+        <button id="addGameBtn" class="btn btn--primary">➕ Add Game</button>
+        <button id="importDataBtn" class="btn">📥 Import</button>
+        <button id="exportDataBtn" class="btn">📤 Export</button>
+        <button id="sampleDataBtn" class="btn btn--ghost">🔁 Sample Slate</button>
+      </div>
+      <input
+        id="searchInput"
+        class="search"
+        type="search"
+        placeholder="Search by team, tag, expert, or pick"
+        autocomplete="off"
+      />
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="panel">
+          <h2>Weekly Snapshot</h2>
+          <div id="snapshot"></div>
+        </section>
+        <section class="panel">
+          <h2>Quick Tips</h2>
+          <ul class="tips">
+            <li>
+              Use the <strong>Market</strong> field to separate moneyline, spread,
+              and totals picks for each game.
+            </li>
+            <li>
+              Add <strong>confidence ratings</strong> and line notes so you can
+              see which experts are aligned.
+            </li>
+            <li>
+              Import &amp; export JSON to keep your prep synced across devices.
+            </li>
+          </ul>
+        </section>
+      </aside>
+      <section class="content">
+        <div id="gamesContainer" class="games"></div>
+      </section>
+    </main>
+
+    <dialog id="gameDialog" class="dialog">
+      <form id="gameForm" method="dialog" class="dialog__form">
+        <header class="dialog__header">
+          <h2 id="gameDialogTitle">Add Game</h2>
+          <button type="button" class="icon-btn" data-close-dialog>✕</button>
+        </header>
+        <div class="dialog__body">
+          <label class="field">
+            <span>Home Team</span>
+            <input name="homeTeam" type="text" required placeholder="Home team" />
+          </label>
+          <label class="field">
+            <span>Away Team</span>
+            <input name="awayTeam" type="text" required placeholder="Away team" />
+          </label>
+          <label class="field">
+            <span>Kickoff (date &amp; time)</span>
+            <input name="kickoff" type="text" placeholder="Sun • 4:25 PM ET" />
+          </label>
+          <label class="field">
+            <span>Location</span>
+            <input name="location" type="text" placeholder="Arrowhead Stadium" />
+          </label>
+          <label class="field">
+            <span>Tags</span>
+            <input
+              name="tags"
+              type="text"
+              placeholder="primetime, weather, AFC"
+            />
+            <small>Comma-separated tags help filter later.</small>
+          </label>
+          <label class="field">
+            <span>Game notes</span>
+            <textarea
+              name="notes"
+              rows="3"
+              placeholder="Injuries, weather, matchup trends..."
+            ></textarea>
+          </label>
+        </div>
+        <footer class="dialog__footer">
+          <button type="button" class="btn" data-close-dialog>Cancel</button>
+          <button type="submit" class="btn btn--primary">Save Game</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="predictionDialog" class="dialog">
+      <form id="predictionForm" method="dialog" class="dialog__form">
+        <header class="dialog__header">
+          <h2 id="predictionDialogTitle">Add Prediction</h2>
+          <button type="button" class="icon-btn" data-close-dialog>✕</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid">
+            <label class="field">
+              <span>Source / Expert</span>
+              <input
+                name="source"
+                type="text"
+                required
+                placeholder="PFF, Sharp Football, etc."
+              />
+            </label>
+            <label class="field">
+              <span>Market</span>
+              <input name="market" type="text" placeholder="Spread, Moneyline, Total" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Pick</span>
+            <input name="pick" type="text" required placeholder="Chiefs -2.5" />
+          </label>
+          <label class="field">
+            <span>Line / Odds</span>
+            <input name="line" type="text" placeholder="-110, +145, 47.5" />
+          </label>
+          <label class="field field--inline">
+            <span>Confidence</span>
+            <div class="confidence-field">
+              <input
+                name="confidence"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value="50"
+              />
+              <output data-confidence-output>50%</output>
+            </div>
+          </label>
+          <label class="field">
+            <span>Reference link</span>
+            <input name="link" type="url" placeholder="https://example.com/article" />
+          </label>
+          <label class="field">
+            <span>Notes</span>
+            <textarea
+              name="notes"
+              rows="3"
+              placeholder="Context about the pick, injuries, betting angle..."
+            ></textarea>
+          </label>
+        </div>
+        <footer class="dialog__footer">
+          <button type="button" class="btn" data-close-dialog>Cancel</button>
+          <button type="submit" class="btn btn--primary">Save Pick</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <input id="importFileInput" type="file" accept="application/json" hidden />
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">
+        <p>No games added yet.</p>
+        <button class="btn btn--primary" data-empty-add>Start with a new matchup</button>
+      </div>
+    </template>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

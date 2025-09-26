@@ -69,6 +69,25 @@ function getMarketMeta(label) {
   return { icon: '📌', description: '' };
 }
 
+function validateHttpUrl(value) {
+  if (!value) return undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
+  const hasAllowedPrefix = /^(https?:)?\/\//i.test(trimmed) || trimmed.startsWith('/');
+  if (!hasAllowedPrefix) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch (error) {
+    console.warn('Discarding invalid link value', value, error);
+  }
+  return undefined;
+}
+
 const dialogs = {
   game: document.getElementById('gameDialog'),
   prediction: document.getElementById('predictionDialog'),
@@ -246,7 +265,12 @@ function renderGameCard(game) {
   if (summary) {
     const banner = document.createElement('div');
     banner.className = 'summary-banner';
-    banner.innerHTML = `<strong>${summary.pick}</strong><span>${summary.count} of ${summary.total} sources (${summary.percent}%)`;
+    const pick = document.createElement('strong');
+    pick.textContent = summary.pick;
+    const details = document.createElement('span');
+    details.textContent = `${summary.count} of ${summary.total} sources (${summary.percent}%)`;
+    banner.appendChild(pick);
+    banner.appendChild(details);
     header.appendChild(banner);
   }
 
@@ -391,7 +415,7 @@ function renderPredictionItem(game, prediction, index, totalInMarket) {
 
   const confidence = document.createElement('div');
   confidence.className = 'prediction__confidence';
-  if (typeof prediction.confidence === 'number') {
+  if (Number.isFinite(prediction.confidence)) {
     const meter = document.createElement('div');
     meter.className = 'confidence-meter';
     meter.style.setProperty('--confidence', `${prediction.confidence}%`);
@@ -409,14 +433,15 @@ function renderPredictionItem(game, prediction, index, totalInMarket) {
     noteSpan.textContent = prediction.notes;
     notes.appendChild(noteSpan);
   }
-  if (prediction.link) {
+  const safeLink = validateHttpUrl(prediction.link);
+  if (safeLink) {
     if (notes.childNodes.length) {
       const separator = document.createElement('span');
       separator.textContent = ' · ';
       notes.appendChild(separator);
     }
     const anchor = document.createElement('a');
-    anchor.href = prediction.link;
+    anchor.href = safeLink;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
     anchor.textContent = 'Source';
@@ -575,10 +600,10 @@ function handlePredictionSubmit(event) {
       const value = formData.get('confidence');
       if (value === null || value === undefined || value === '') return undefined;
       const numeric = Number(value);
-      return Number.isNaN(numeric) ? undefined : numeric;
+      return Number.isFinite(numeric) ? numeric : undefined;
     })(),
     notes: (formData.get('notes') || '').trim(),
-    link: (formData.get('link') || '').trim(),
+    link: validateHttpUrl(formData.get('link')),
     priority: formData.has('priority'),
   };
 
@@ -1085,13 +1110,18 @@ function normalizeGames(games) {
           pick: typeof prediction.pick === 'string' ? prediction.pick.trim() : prediction.pick,
           line: typeof prediction.line === 'string' ? prediction.line.trim() : prediction.line,
           notes: typeof prediction.notes === 'string' ? prediction.notes.trim() : prediction.notes,
-          link: typeof prediction.link === 'string' ? prediction.link.trim() : prediction.link,
-          confidence:
-            typeof prediction.confidence === 'number'
-              ? prediction.confidence
-              : prediction.confidence === undefined || prediction.confidence === null || prediction.confidence === ''
-              ? undefined
-              : Number(prediction.confidence),
+          link: validateHttpUrl(prediction.link),
+          confidence: (() => {
+            if (
+              prediction.confidence === undefined ||
+              prediction.confidence === null ||
+              prediction.confidence === ''
+            ) {
+              return undefined;
+            }
+            const numeric = Number(prediction.confidence);
+            return Number.isFinite(numeric) ? numeric : undefined;
+          })(),
           priority:
             typeof prediction.priority === 'string'
               ? prediction.priority.toLowerCase() === 'true'

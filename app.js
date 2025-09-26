@@ -7,6 +7,24 @@ const state = {
   filterText: '',
 };
 
+const MARKET_LABELS = [
+  {
+    labels: ['spread', 'against the spread', 'ats', 'point spread'],
+    value: 'Spread',
+    icon: '📏',
+    description: 'Against the spread selections',
+  },
+  { labels: ['moneyline', 'money line', 'ml'], value: 'Moneyline', icon: '💰', description: 'Straight-up winners' },
+  {
+    labels: ['total', 'over/under', 'o/u', 'ou', 'over under'],
+    value: 'Total',
+    icon: '📊',
+    description: 'Game totals and tempo reads',
+  },
+  { labels: ['player prop', 'props', 'prop'], value: 'Player Prop', icon: '🎯', description: 'Individual player markets' },
+  { labels: ['team total'], value: 'Team Total', icon: '🏟️', description: 'Team scoring outlooks' },
+];
+
 function generateId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -25,6 +43,31 @@ const selectors = {
   importFileInput: document.getElementById('importFileInput'),
   emptyTemplate: document.getElementById('emptyStateTemplate'),
 };
+
+function formatMarketLabel(input) {
+  if (!input) return 'General Picks';
+  const raw = String(input).trim();
+  if (!raw) return 'General Picks';
+  const normalized = raw.toLowerCase();
+  for (const label of MARKET_LABELS) {
+    if (label.labels.includes(normalized)) {
+      return label.value;
+    }
+  }
+  return raw;
+}
+
+function getMarketMeta(label) {
+  const normalized = formatMarketLabel(label);
+  if (!label || normalized === 'General Picks') {
+    return { icon: '🧠', description: 'Mixed markets or unspecified angles' };
+  }
+  const preset = MARKET_LABELS.find((item) => item.value === normalized);
+  if (preset) {
+    return { icon: preset.icon, description: preset.description };
+  }
+  return { icon: '📌', description: '' };
+}
 
 const dialogs = {
   game: document.getElementById('gameDialog'),
@@ -230,7 +273,7 @@ function renderGameCard(game) {
   header.appendChild(actions);
   card.appendChild(header);
 
-  const markets = groupBy(game.predictions, (prediction) => prediction.market || 'General Picks');
+  const markets = groupBy(game.predictions, (prediction) => formatMarketLabel(prediction.market));
   if (markets.size) {
     markets.forEach((predictions, market) => {
       card.appendChild(renderMarketBlock(game, market, predictions));
@@ -265,15 +308,30 @@ function renderMarketBlock(game, market, predictions) {
   titleRow.className = 'market-title';
 
   const title = document.createElement('h3');
-  title.textContent = market;
+  const meta = getMarketMeta(market);
+  const icon = document.createElement('span');
+  icon.className = 'market-icon';
+  icon.textContent = meta.icon;
+  title.appendChild(icon);
+  const titleText = document.createElement('span');
+  titleText.textContent = market;
+  title.appendChild(titleText);
   titleRow.appendChild(title);
 
-  const meta = document.createElement('span');
-  meta.className = 'market-meta';
-  meta.textContent = `${predictions.length} pick${predictions.length === 1 ? '' : 's'}`;
-  titleRow.appendChild(meta);
+  const metaText = document.createElement('span');
+  metaText.className = 'market-meta';
+  metaText.textContent = `${predictions.length} pick${predictions.length === 1 ? '' : 's'}`;
+  titleRow.appendChild(metaText);
 
   header.appendChild(titleRow);
+
+  if (meta.description) {
+    const subtitle = document.createElement('p');
+    subtitle.className = 'market-subtitle';
+    subtitle.textContent = meta.description;
+    header.appendChild(subtitle);
+  }
+
   header.appendChild(buildSummaryBar(predictions));
 
   const list = document.createElement('ul');
@@ -314,9 +372,11 @@ function renderPredictionItem(game, prediction) {
   pill.textContent = prediction.pick;
   pick.appendChild(pill);
   if (prediction.market) {
+    const label = formatMarketLabel(prediction.market);
+    const meta = getMarketMeta(prediction.market);
     const marketTag = document.createElement('span');
-    marketTag.className = 'tag-chip';
-    marketTag.textContent = prediction.market;
+    marketTag.className = 'market-pill';
+    marketTag.textContent = `${meta.icon} ${label}`;
     pick.appendChild(marketTag);
   }
 
@@ -465,13 +525,18 @@ function handlePredictionSubmit(event) {
   }
   const payload = {
     id: state.editingPrediction?.id ?? generateId(),
-    source: formData.get('source').trim(),
-    market: formData.get('market').trim(),
-    pick: formData.get('pick').trim(),
-    line: formData.get('line').trim(),
-    confidence: Number(formData.get('confidence')),
-    notes: formData.get('notes').trim(),
-    link: formData.get('link').trim(),
+    source: (formData.get('source') || '').trim(),
+    market: (formData.get('market') || '').trim(),
+    pick: (formData.get('pick') || '').trim(),
+    line: (formData.get('line') || '').trim(),
+    confidence: (() => {
+      const value = formData.get('confidence');
+      if (value === null || value === undefined || value === '') return undefined;
+      const numeric = Number(value);
+      return Number.isNaN(numeric) ? undefined : numeric;
+    })(),
+    notes: (formData.get('notes') || '').trim(),
+    link: (formData.get('link') || '').trim(),
   };
 
   if (!payload.source || !payload.pick) {
@@ -645,17 +710,205 @@ function renderSnapshot() {
     grid.appendChild(row);
   });
   snapshot.appendChild(grid);
+
+  const marketBreakdown = buildMarketBreakdown(state.games);
+  if (marketBreakdown) {
+    snapshot.appendChild(marketBreakdown);
+  }
+
+  const consensusLeaders = buildConsensusLeaders(state.games);
+  if (consensusLeaders) {
+    snapshot.appendChild(consensusLeaders);
+  }
+
+  const confidenceLeaders = buildConfidenceLeaders(state.games);
+  if (confidenceLeaders) {
+    snapshot.appendChild(confidenceLeaders);
+  }
+}
+
+function createSnapshotSection(titleText) {
+  const section = document.createElement('section');
+  section.className = 'snapshot-section';
+  const title = document.createElement('h3');
+  title.className = 'snapshot-section__title';
+  title.textContent = titleText;
+  section.appendChild(title);
+  return section;
+}
+
+function buildMarketBreakdown(games) {
+  const counts = new Map();
+  let total = 0;
+  games.forEach((game) => {
+    game.predictions.forEach((prediction) => {
+      total += 1;
+      const label = formatMarketLabel(prediction.market);
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+  });
+
+  if (!total) return null;
+
+  const section = createSnapshotSection('Market Coverage');
+  const list = document.createElement('ul');
+  list.className = 'snapshot-list';
+
+  const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  entries.forEach(([market, count]) => {
+    const item = document.createElement('li');
+    item.className = 'snapshot-row';
+    const meta = getMarketMeta(market);
+
+    const chip = document.createElement('span');
+    chip.className = 'snapshot-chip';
+    chip.textContent = `${meta.icon} ${market}`;
+    item.appendChild(chip);
+
+    const metric = document.createElement('span');
+    metric.className = 'snapshot-metric';
+    const percent = Math.round((count / total) * 100);
+    metric.textContent = `${count} pick${count === 1 ? '' : 's'} • ${percent}%`;
+    item.appendChild(metric);
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+  return section;
+}
+
+function buildConsensusLeaders(games) {
+  const leaders = games
+    .map((game) => ({ game, summary: buildConsensusSummary(game.predictions) }))
+    .filter((entry) => entry.summary)
+    .sort((a, b) => b.summary.percent - a.summary.percent)
+    .slice(0, 3);
+
+  if (!leaders.length) return null;
+
+  const section = createSnapshotSection('Consensus Board (40%+ alignment)');
+  const list = document.createElement('ul');
+  list.className = 'snapshot-list snapshot-list--stacked';
+
+  leaders.forEach(({ game, summary }) => {
+    const item = document.createElement('li');
+    item.className = 'snapshot-row snapshot-row--stacked';
+
+    const header = document.createElement('div');
+    header.className = 'snapshot-row__header';
+    const badge = document.createElement('span');
+    badge.className = 'snapshot-badge snapshot-badge--consensus';
+    badge.textContent = `${summary.percent}%`;
+    header.appendChild(badge);
+
+    const pick = document.createElement('strong');
+    pick.textContent = summary.pick;
+    header.appendChild(pick);
+    item.appendChild(header);
+
+    const detail = document.createElement('div');
+    detail.className = 'snapshot-subtext';
+    detail.textContent = `${formatMatchup(game)} • ${summary.count} of ${summary.total} sources aligned`;
+    item.appendChild(detail);
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+  return section;
+}
+
+function buildConfidenceLeaders(games) {
+  const entries = [];
+  games.forEach((game) => {
+    game.predictions.forEach((prediction) => {
+      if (typeof prediction.confidence === 'number' && !Number.isNaN(prediction.confidence)) {
+        entries.push({ game, prediction });
+      }
+    });
+  });
+
+  if (!entries.length) return null;
+
+  entries.sort((a, b) => b.prediction.confidence - a.prediction.confidence);
+  const top = entries.slice(0, 5);
+
+  const section = createSnapshotSection('Highest Confidence Board');
+  const list = document.createElement('ul');
+  list.className = 'snapshot-list snapshot-list--stacked';
+
+  top.forEach(({ game, prediction }) => {
+    const item = document.createElement('li');
+    item.className = 'snapshot-row snapshot-row--stacked';
+
+    const header = document.createElement('div');
+    header.className = 'snapshot-row__header';
+
+    const badge = document.createElement('span');
+    badge.className = 'snapshot-badge';
+    badge.textContent = `${prediction.confidence}%`;
+    header.appendChild(badge);
+
+    const source = document.createElement('span');
+    source.className = 'snapshot-source';
+    source.textContent = prediction.source;
+    header.appendChild(source);
+
+    if (prediction.market) {
+      const market = document.createElement('span');
+      market.className = 'snapshot-subtext';
+      market.textContent = `${getMarketMeta(prediction.market).icon} ${formatMarketLabel(prediction.market)}`;
+      header.appendChild(market);
+    }
+
+    item.appendChild(header);
+
+    const detail = document.createElement('div');
+    detail.className = 'snapshot-subtext';
+    const odds = prediction.line ? ` (${prediction.line})` : '';
+    detail.textContent = `${formatMatchup(game)} • ${prediction.pick}${odds}`;
+    item.appendChild(detail);
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+  return section;
+}
+
+function formatMatchup(game) {
+  if (!game) return '';
+  const away = game.awayTeam || 'Away';
+  const home = game.homeTeam || 'Home';
+  return `${away} @ ${home}`;
 }
 
 function normalizeGames(games) {
   return games.map((game) => ({
     ...game,
     id: game.id ?? generateId(),
-    tags: Array.isArray(game.tags) ? game.tags : [],
+    homeTeam: typeof game.homeTeam === 'string' ? game.homeTeam.trim() : game.homeTeam,
+    awayTeam: typeof game.awayTeam === 'string' ? game.awayTeam.trim() : game.awayTeam,
+    kickoff: typeof game.kickoff === 'string' ? game.kickoff.trim() : game.kickoff,
+    location: typeof game.location === 'string' ? game.location.trim() : game.location,
+    notes: typeof game.notes === 'string' ? game.notes.trim() : game.notes,
+    tags: Array.isArray(game.tags) ? game.tags.map((tag) => (typeof tag === 'string' ? tag.trim() : tag)).filter(Boolean) : [],
     predictions: Array.isArray(game.predictions)
       ? game.predictions.map((prediction) => ({
           ...prediction,
           id: prediction.id ?? generateId(),
+          source: typeof prediction.source === 'string' ? prediction.source.trim() : prediction.source,
+          market:
+            typeof prediction.market === 'string'
+              ? prediction.market.trim()
+              : prediction.market
+              ? String(prediction.market)
+              : '',
+          pick: typeof prediction.pick === 'string' ? prediction.pick.trim() : prediction.pick,
+          line: typeof prediction.line === 'string' ? prediction.line.trim() : prediction.line,
+          notes: typeof prediction.notes === 'string' ? prediction.notes.trim() : prediction.notes,
+          link: typeof prediction.link === 'string' ? prediction.link.trim() : prediction.link,
           confidence:
             typeof prediction.confidence === 'number'
               ? prediction.confidence
@@ -795,6 +1048,67 @@ function sampleSlate() {
           confidence: 64,
           notes: 'Expect explosives vs aggressive defenses',
           link: 'https://www.sharpfootballanalysis.com',
+        },
+        {
+          id: generateId(),
+          source: 'RotoGrinders Betting',
+          market: 'Team Total',
+          pick: '49ers team total over 24.5',
+          line: '-115',
+          confidence: 61,
+          notes: 'Dallas defensive splits dip outdoors; SF offense rolling',
+          link: 'https://rotogrinders.com',
+        },
+      ],
+    },
+    {
+      id: generateId(),
+      homeTeam: 'Baltimore Ravens',
+      awayTeam: 'Miami Dolphins',
+      kickoff: 'Sun • 1:00 PM ET',
+      location: "M&T Bank Stadium",
+      tags: ['AFC', 'weather watch'],
+      notes: 'Forecast calling for breezy conditions. Monitor OL injuries for Miami.',
+      predictions: [
+        {
+          id: generateId(),
+          source: 'BettingPros Consensus',
+          market: 'Spread',
+          pick: 'Ravens -3',
+          line: '-115',
+          confidence: 60,
+          notes: 'Market shading toward Baltimore with injury concerns for Dolphins OL',
+          link: 'https://www.bettingpros.com',
+        },
+        {
+          id: generateId(),
+          source: 'Establish The Run',
+          market: 'Player Prop',
+          pick: 'Lamar Jackson over 58.5 rush yds',
+          line: '-120',
+          confidence: 74,
+          notes: 'Miami man coverage opens rushing lanes for QB scrambles',
+          link: 'https://establishtherun.com',
+        },
+        {
+          id: generateId(),
+          source: 'The Lines Podcast',
+          market: 'Moneyline',
+          pick: 'Ravens ML',
+          line: '-160',
+          confidence: 65,
+          notes: 'Trusting Harbaugh off mini-bye with rest advantage',
+          link: 'https://www.thelines.com',
+        },
+        {
+          id: generateId(),
+          source: 'VEGAS Insider',
+          market: 'Total',
+          pick: 'Over 49.5',
+          line: '-108',
+          confidence: 52,
+          notes: 'Projected pace increase with explosive playmakers on both sides',
+          link: 'https://www.vegasinsider.com',
         },
       ],
     },

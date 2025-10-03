@@ -386,7 +386,7 @@ function renderPredictionItem(game, prediction) {
 
   const confidence = document.createElement('div');
   confidence.className = 'prediction__confidence';
-  if (typeof prediction.confidence === 'number') {
+  if (Number.isFinite(prediction.confidence)) {
     const meter = document.createElement('div');
     meter.className = 'confidence-meter';
     meter.style.setProperty('--confidence', `${prediction.confidence}%`);
@@ -909,12 +909,16 @@ function normalizeGames(games) {
           line: typeof prediction.line === 'string' ? prediction.line.trim() : prediction.line,
           notes: typeof prediction.notes === 'string' ? prediction.notes.trim() : prediction.notes,
           link: typeof prediction.link === 'string' ? prediction.link.trim() : prediction.link,
-          confidence:
-            typeof prediction.confidence === 'number'
-              ? prediction.confidence
-              : prediction.confidence === undefined || prediction.confidence === null || prediction.confidence === ''
-              ? undefined
-              : Number(prediction.confidence),
+          confidence: (() => {
+            if (prediction.confidence === undefined || prediction.confidence === null || prediction.confidence === '') {
+              return undefined;
+            }
+            if (typeof prediction.confidence === 'number') {
+              return Number.isFinite(prediction.confidence) ? prediction.confidence : undefined;
+            }
+            const coerced = Number(prediction.confidence);
+            return Number.isFinite(coerced) ? coerced : undefined;
+          })(),
         }))
       : [],
   }));
